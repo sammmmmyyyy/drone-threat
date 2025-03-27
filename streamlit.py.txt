@@ -1,0 +1,52 @@
+import streamlit as st
+import torch
+import cv2
+import numpy as np
+from ultralytics import YOLO
+from PIL import Image
+
+# Load YOLO model
+MODEL_PATH = "C:\\Users\\dream\\Documents\\AI_drone\\runs\\detect\\train\\weights\\best.pt"
+model = YOLO(MODEL_PATH)
+
+# Streamlit UI
+st.title("AI Drone Threat Detection")
+st.write("Upload an image and provide RF & velocity values for analysis.")
+
+# Upload image
+uploaded_file = st.file_uploader("Upload JPEG image", type=["jpg", "jpeg"])
+
+# User inputs for RF values and velocity
+rf_signal = st.number_input("Enter RF Signal Strength", min_value=-100.0, max_value=100.0, value=0.0)
+velocity_x = st.number_input("Enter X Velocity", value=0.0)
+velocity_y = st.number_input("Enter Y Velocity", value=0.0)
+velocity_z = st.number_input("Enter Z Velocity", value=0.0)
+
+if uploaded_file is not None:
+    # Convert image to OpenCV format
+    image = Image.open(uploaded_file)
+    image_cv = np.array(image)
+    image_cv = cv2.cvtColor(image_cv, cv2.COLOR_RGB2BGR)
+
+    # Run YOLO detection
+    results = model(image_cv)
+    detections = []
+    
+    for result in results:
+        for box in result.boxes:
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            confidence = float(box.conf[0])
+            class_name = model.names[int(box.cls[0])]
+            detections.append({
+                "class_name": class_name,
+                "confidence": confidence,
+                "x1": x1, "y1": y1, "x2": x2, "y2": y2
+            })
+            # Draw bounding box
+            cv2.rectangle(image_cv, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(image_cv, f"{class_name} {confidence:.2f}", (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+    
+    # Display results
+    st.image(image_cv, caption="Processed Image", use_column_width=True)
+    st.json({"RF Signal": rf_signal, "Velocity": [velocity_x, velocity_y, velocity_z], "Detections": detections})
